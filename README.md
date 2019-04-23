@@ -32,18 +32,30 @@ spock_mock_object = SpockMock()
 def mock_add_numbers(first_number, second_number):
     return first_number + second_number
 spock_mock_object.add_numbers.mock_return = mock_add_numbers
-print(spock_mock_object.add_numbers(1, 2))  # This will call the provided method and print 3
-print(spock_mock_object.add_numbers(3, second_number=3))  # This will call the provided method and print 6
-print(spock_mock_object.add_numbers(first_number=4, second_number=5))  # This will call the provided method and print 9
-print(spock_mock_object.add_numbers(4))  # This will fail, as the second argument isn't provided
+
+# This will call the provided method and print 3
+print(spock_mock_object.add_numbers(1, 2))
+
+# This will call the provided method and print 6
+print(spock_mock_object.add_numbers(3, second_number=3))
+
+# This will call the provided method and print 9
+print(spock_mock_object.add_numbers(first_number=4, second_number=5))
+
+# This will fail, as the second argument isn't provided
+print(spock_mock_object.add_numbers(4))
 ```
 
 ### Mocking a method with a constant
 ```python
 spock_mock_object = SpockMock()
 spock_mock_object.get_constant.mock_return = 5
-print(spock_mock_object.get_constant(1, 2))  # This will return the base mock and print 5
-print(spock_mock_object.get_constant())  # This will return the base mock and print 5
+
+# This will return the base mock and print 5
+print(spock_mock_object.get_constant(1, 2))
+
+# This will return the base mock and print 5
+print(spock_mock_object.get_constant())
 ```
 
 ### Mocking a method for specific input
@@ -54,12 +66,17 @@ def mock_add_numbers(first_number, second_number):
     return first_number + second_number
 spock_mock_object.add_numbers.mock_specific(mock_add_numbers, 1, 2)
 
-print(spock_mock_object.add_numbers(1, 2))  # This will call the provided method and print 3
+# This will call the provided method and print 3
+print(spock_mock_object.add_numbers(1, 2))
 
-print(spock_mock_object.add_numbers(3, second_number=3))  # This won't call the provided method and instead will call the base mock, which happens to return a SpockMock object, just like unittest.Mock
+# This won't call the provided method and instead will call the base mock,
+# which happens to return a SpockMock object, just like unittest.Mock
+print(spock_mock_object.add_numbers(3, second_number=3))
 
-spock_mock_object.add_numbers.mock_specific(17, 3, 4)
-print(spock_mock_object.add_numbers(3, 4))  # This will print 17.
+spock_mock_object.add_numbers.specific_mock_return(17, 3, 4)
+
+# This will print 17.
+print(spock_mock_object.add_numbers(3, 4))
 
 # Adding a base mock maintains the previously mocked calls
 def mock_sub_numbers(first_number, second_number):
@@ -82,9 +99,14 @@ spock_mock_object = SpockMock()
 spock_mock_object.some_method(1, 2)
 spock_mock_object.some_method()
 
-2 * spock_mock_object.some_method.any()  # Asserts there were 2 calls. This ignores arguments in the calls
-1 * spock_mock_object.some_method.specific()  # Asserts it was called once with no arguments
-1 * spock_mock_object.some_method.specific(1, 2)  # Assert it was called once with (1, 2) as arguments
+# Asserts there were 2 calls. This ignores arguments in the calls
+2 * spock_mock_object.some_method.any()
+
+# Asserts it was called once with no arguments
+1 * spock_mock_object.some_method.specific()
+
+# Assert it was called once with (1, 2) as arguments
+1 * spock_mock_object.some_method.specific(1, 2)
 ```
 One thing you might be worried about is linters picking up on the multiplication not being used. This should not be an issue, as the method call should stop linters from reporting this as an unused multiplication.
 
@@ -95,13 +117,60 @@ spock_mock_object = SpockMock()
 spock_mock_object.some_method(1, 2)
 spock_mock_object.some_method()
 
-(1, 3) * spock_mock_object.some_method.any()  # Asserts that the method was called between 1 and 3 times (inclusive)
+# Asserts that the method was called between 1 and 3 times (inclusive)
+(1, 3) * spock_mock_object.some_method.any()
 
-(1, 3) * spock_mock_object.some_other_method.any()  # This will fail, as there are no calls to some_other_method
+# This will fail, as there are no calls to some_other_method
+(1, 3) * spock_mock_object.some_other_method.any()
 
 spock_mock_object.some_method()
 spock_mock_object.some_method()
-(1, 3) * spock_mock_object.some_method.any()  # This will now fail, as there are 4 calls to some_method
+
+# This will now fail, as there are 4 calls to some_method
+(1, 3) * spock_mock_object.some_method.any()
+```
+This is useful for when you don't know exactly how many calls there will be.
+
+Say you have a class like `SomeClass` defined below.
+You could test it like this:
+```python
+import unittest
+from random import shuffle
+
+from src import SpockMock
+
+
+class SomeClass:
+    def __init__(self, some_object):
+        self.some_object = some_object
+
+    def my_method(self):
+        some_list = [1, 2, 3]
+        shuffle(some_list)
+        for i in some_list:
+            self.some_object.some_method(i)
+
+
+class TestSomeClass(unittest.TestCase):
+    def test_my_method(self):
+        def some_method(num):
+            if num == 1:
+                raise Exception('Failure')
+        spock_mock_object = SpockMock()
+        spock_mock_object.some_method.mock_return = some_method
+        
+        my_class = SomeClass(spock_mock_object)
+        with self.assertRaises(Exception) as context:
+            my_class.my_method()
+
+        # We know an exception was raised but we don't know how many 
+        # times the method was called or if it even was called. All we 
+        # know is that it should have been called between 1 and 3 times.
+        (1, 3) * spock_mock_object.some_method.any()
+        
+        # Finally, we can check that the exception message is not modified.
+        self.assertIn('Failure', str(context.exception))
+
 ```
 
 ## Practical Examples
@@ -168,13 +237,15 @@ class TestUserService(unittest.TestCase):
             self.user_service.get_user(-1)
         self.assertIn('Not found', str(context.exception))
 
+        1 * self.mock_db.get.specific(-1)
+
     def test_batch_get_retrieves_users_from_the_database(self):
         first_user_id, first_name = self.user_service.create_user('user1')
         second_user_id, second_name = self.user_service.create_user('user2')
 
         found_users = self.user_service.batch_get_users([first_user_id, second_user_id])
 
-        (1, 2) * self.mock_db.get.any()
+        2 * self.mock_db.get.any()
 
         self.assertEqual(found_users[0], (first_user_id, first_name))
         self.assertEqual(found_users[1], (second_user_id, second_name))
@@ -187,10 +258,13 @@ class TestUserService(unittest.TestCase):
             self.user_service.batch_get_users([first_user_id, second_user_id, -1])
         self.assertIn('Not found', str(context.exception))
 
+        # Depending on the order we retrieve the items in, there should be between 1 and 3 calls
+        (1, 3) * self.mock_db.get.any()
+
     def test_create_user_fails_if_db_is_down(self):
         def mock_db_failure(*_):
             raise Exception('DB failure')
-        self.mock_db.insert.mock_specific(mock_db_failure, "' SELECT -- bad sql injection")
+        self.mock_db.insert.specific_mock_return(mock_db_failure, "' SELECT -- bad sql injection")
 
         with self.assertRaises(Exception) as context:
             self.user_service.create_user("' SELECT -- bad sql injection")
@@ -205,8 +279,9 @@ class TestUserService(unittest.TestCase):
 ```
 You can see this example in action in the `example/` folder
 ## Known issues
-- If the mocked method raises an exception, it is not added to the call count. It should raise the exception and increase the call count.
+- There could be potential issues if using this as well as side_effects. This will probably be improved upon in the future.
 
 ## Features I would like to add
 - Wildcards in the specific method call assertion.
 Something like `1 * mocked_object.some_method.specific(ANY, 2)`, which would ignore the first argument and only match the second argument.
+- Removing of old/unused specific mocks

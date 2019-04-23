@@ -205,7 +205,7 @@ class TestSpockMock(unittest.TestCase):
         spock_mock.add_numbers.mock_return = 1
 
         # And: A function with specific arguments is mocked
-        spock_mock.add_numbers.mock_specific(3, 1, 2)
+        spock_mock.add_numbers.specific_mock_return(3, 1, 2)
 
         # When: A call is made to the function with the specific arguments
         ret = spock_mock.add_numbers(1, 2)

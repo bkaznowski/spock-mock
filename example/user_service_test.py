@@ -50,13 +50,15 @@ class TestUserService(unittest.TestCase):
             self.user_service.get_user(-1)
         self.assertIn('Not found', str(context.exception))
 
+        1 * self.mock_db.get.specific(-1)
+
     def test_batch_get_retrieves_users_from_the_database(self):
         first_user_id, first_name = self.user_service.create_user('user1')
         second_user_id, second_name = self.user_service.create_user('user2')
 
         found_users = self.user_service.batch_get_users([first_user_id, second_user_id])
 
-        (1, 2) * self.mock_db.get.any()
+        2 * self.mock_db.get.any()
 
         self.assertEqual(found_users[0], (first_user_id, first_name))
         self.assertEqual(found_users[1], (second_user_id, second_name))
@@ -69,10 +71,13 @@ class TestUserService(unittest.TestCase):
             self.user_service.batch_get_users([first_user_id, second_user_id, -1])
         self.assertIn('Not found', str(context.exception))
 
+        # Depending on the order we retrieve the items in, there should be between 1 and 3 calls
+        (1, 3) * self.mock_db.get.any()
+
     def test_create_user_fails_if_db_is_down(self):
         def mock_db_failure(*_):
             raise Exception('DB failure')
-        self.mock_db.insert.mock_specific(mock_db_failure, "' SELECT -- bad sql injection")
+        self.mock_db.insert.specific_mock_return(mock_db_failure, "' SELECT -- bad sql injection")
 
         with self.assertRaises(Exception) as context:
             self.user_service.create_user("' SELECT -- bad sql injection")

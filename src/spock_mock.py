@@ -1,4 +1,5 @@
 from unittest.mock import Mock
+import sys
 
 
 class SpockMock(Mock):
@@ -7,18 +8,31 @@ class SpockMock(Mock):
     def __call__(self, *args, **kwargs):
         original_return_value = self.return_value
         mock_return = getattr(self, 'mock_return')
-        if not isinstance(mock_return, SpockMock):
-            self._handle_mock(args, kwargs, mock_return)
 
+        should_raise_exception = False
+        exc_info = None
+        if not isinstance(mock_return, SpockMock):
+            try:
+                self._handle_mock(args, kwargs, mock_return)
+            except Exception:
+                should_raise_exception = True
+                exc_info = sys.exc_info()
         specific_mocks = getattr(self, 'specific_mocks')
         if not isinstance(specific_mocks, SpockMock):
             for specific_mock in specific_mocks:
                 specific_call, specific_args, specific_kwargs = specific_mock
                 if specific_args == args and specific_kwargs == kwargs:
-                    self._handle_mock(args, kwargs, specific_call)
+                    try:
+                        self._handle_mock(args, kwargs, specific_call)
+                        should_raise_exception = False
+                    except Exception:
+                        should_raise_exception = True
+                        exc_info = sys.exc_info()
 
         to_be_returned = super().__call__(*args, **kwargs)
         self.return_value = original_return_value
+        if should_raise_exception:
+            raise exc_info[1].with_traceback(exc_info[2])
         return to_be_returned
 
     def _handle_mock(self, args, kwargs, mock_return):
@@ -40,12 +54,12 @@ class SpockMock(Mock):
     def specific(self, *args, **kwargs):
         return SpecificSpockMock(self, args, kwargs)
 
-    def mock_specific(self, return_call, *args, **kwargs):
-        specific_mocks = getattr(self, 'specific_mocks')
-        if isinstance(specific_mocks, SpockMock):
-            specific_mocks = []
-        specific_mocks.append((return_call, args, kwargs))
-        self.specific_mocks = specific_mocks
+    def specific_mock_return(self, return_call, *args, **kwargs):
+        specific_mock_return = getattr(self, 'specific_mocks')
+        if isinstance(specific_mock_return, SpockMock):
+            specific_mock_return = []
+        specific_mock_return.append((return_call, args, kwargs))
+        setattr(self, 'specific_mocks', specific_mock_return)
 
 
 class AnySpockMock:
